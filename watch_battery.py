@@ -71,16 +71,16 @@ def watch_battery(time_to_sleep:int=5,profile:str="balanced") -> None:
 
         elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat.ps_profile:
             bat_stat.set_powerprofile(profile=bat_stat.bc_profile)
-            
+
         # check for level of battery to advice
         elif bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
             bat_stat.notify(
-                message=f"Conecte el cargador batería por debajo de {bat_stat.MIN_BAT_TRIGGER}%"
+                message=f"Plug the power, battery below {bat_stat.MIN_BAT_TRIGGER}%"
             )
 
         elif bat_stat.percentage > bat_stat.MAX_BAT_TRIGGER and bat_stat.state == "on_ac":
             bat_stat.notify(
-                message=f"Desconecte el cargador, batería por encima de {bat_stat.MAX_BAT_TRIGGER}%"
+                message=f"Unplug the power battery over {bat_stat.MAX_BAT_TRIGGER}%"
             )
 
         sleep(time_to_sleep)
