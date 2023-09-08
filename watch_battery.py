@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import sys
 from time import sleep
 
 import dbus
@@ -13,6 +14,9 @@ class batState():
 
     MIN_BAT_TRIGGER = 30
     MAX_BAT_TRIGGER = 80
+    BRIGHT_DEVICE = "/sys/class/backlight/amdgpu_bl0/brightness"
+    BRIGHTNESS_BATTERY = 40
+    BRIGHTNESS_AC = 70
 
     def __init__(self) -> None:
         self.sys_bus = dbus.SystemBus()
@@ -58,6 +62,14 @@ class batState():
             [], {"critical": 1}, 5000
         )
 
+    def set_brightness(self, brightness: int) -> None:
+        try:
+            with open(self.BRIGHT_DEVICE) as bd:
+                bd.write(brightness)
+        except:
+            print(f"Error opening device {self.BRIGHT_DEVICE}")
+            sys.exit(1)
+
 
 def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
     """seconds to sleep and default power-profile"""
@@ -70,9 +82,11 @@ def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
         # check for power status and adjust powerprofiles
         if bat_stat.state == "on_battery" and bat_stat.active_profile == bat_stat.bc_profile:
             bat_stat.set_powerprofile(profile=bat_stat.ps_profile)
+            bat_stat.set_brightness(bat_stat.BRIGHTNESS_AC)
 
         elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat.ps_profile:
             bat_stat.set_powerprofile(profile=bat_stat.bc_profile)
+            bat_stat.set_brightness(bat_stat.BRIGHTNESS_BATTERY)
 
         # check for level of battery to advice
         elif bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
