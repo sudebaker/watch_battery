@@ -13,5 +13,7 @@ python-dbus
   RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness", \
   RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
 
-3. power-profiles-daemon installed and configured
-4. Run it from your desktop session launcher.
+3. Change the line in the script:
+3.1. BRIGHT_DEVICE = "/sys/class/backlight/amdgpu_bl0/brightness" with your own device
+4. power-profiles-daemon installed and configured
+5. Run it from your desktop session launcher.
