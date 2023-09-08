@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from io import UnsupportedOperation
 import os
 import sys
 from time import sleep
@@ -64,10 +65,11 @@ class batState():
 
     def set_brightness(self, brightness: int) -> None:
         try:
-            with open(self.BRIGHT_DEVICE) as bd:
+            with open(self.BRIGHT_DEVICE,'w') as bd:
                 bd.write(brightness)
-        except:
-            print(f"Error opening device {self.BRIGHT_DEVICE}")
+        except UnsupportedOperation as e:
+            print(f"Error opening device {self.BRIGHT_DEVICE}\n")
+            print(e)
             sys.exit(1)
 
 
