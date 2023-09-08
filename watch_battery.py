@@ -79,24 +79,24 @@ def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
     while True:
         # getting current state
         bat_stat.get_powerprofile()
-        # check for power status and adjust powerprofiles
+        # check for power status, adjusting powerprofiles and brightness in consecuence
         if bat_stat.state == "on_battery" and bat_stat.active_profile == bat_stat.bc_profile:
             bat_stat.set_powerprofile(profile=bat_stat.ps_profile)
-            bat_stat.set_brightness(bat_stat.BRIGHTNESS_AC)
+            bat_stat.set_brightness(bat_stat.BRIGHTNESS_BATTERY)
 
         elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat.ps_profile:
             bat_stat.set_powerprofile(profile=bat_stat.bc_profile)
-            bat_stat.set_brightness(bat_stat.BRIGHTNESS_BATTERY)
+            bat_stat.set_brightness(bat_stat.BRIGHTNESS_AC)
 
         # check for level of battery to advice
         elif bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
             bat_stat.notify(
-                message=f"Plug the power, battery below {bat_stat.MIN_BAT_TRIGGER}%"
+                message=f"Plug the charger, battery below {bat_stat.MIN_BAT_TRIGGER}%"
             )
 
         elif bat_stat.percentage > bat_stat.MAX_BAT_TRIGGER and bat_stat.state == "on_ac":
             bat_stat.notify(
-                message=f"Unplug the power battery over {bat_stat.MAX_BAT_TRIGGER}%"
+                message=f"Unplug the charger, battery over {bat_stat.MAX_BAT_TRIGGER}%"
             )
 
         sleep(time_to_sleep)
