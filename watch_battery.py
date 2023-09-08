@@ -16,8 +16,8 @@ class batState():
     MIN_BAT_TRIGGER = 30
     MAX_BAT_TRIGGER = 80
     BRIGHT_DEVICE = "/sys/class/backlight/amdgpu_bl0/brightness"
-    BRIGHTNESS_BATTERY = 40
-    BRIGHTNESS_AC = 80
+    BRIGHTNESS_BATTERY = "40"
+    BRIGHTNESS_AC = "80"
 
     def __init__(self) -> None:
         self.sys_bus = dbus.SystemBus()
