@@ -13,7 +13,7 @@ class batState():
     # Some ideas taken from :
     # https://github.com/wogscpar/upower-python
 
-    #Notification if battery below:
+    # Notification if battery below:
     MIN_BAT_TRIGGER = 30
     # Notification if battery over:
     MAX_BAT_TRIGGER = 80
@@ -26,46 +26,46 @@ class batState():
 
     def __init__(self) -> None:
 
-        self.UPOWER_NAME = "org.freedesktop.UPower"
-        self.UPOWER_PATH = "/org/freedesktop/UPower"
-        self.DBUS_PROPERTIES = "org.freedesktop.DBus.Properties"
-        self.PROFILES_NAME = "net.hadess.PowerProfiles"
-        self.PROFILES_PATH = "/net/hadess/PowerProfiles"
-        self.NOTIFICATIONS = "org.freedesktop.Notifications"
-        self.sys_bus = dbus.SystemBus()
+        self.__UPOWER_NAME = "org.freedesktop.UPower"
+        self.__UPOWER_PATH = "/org/freedesktop/UPower"
+        self.__DBUS_PROPERTIES = "org.freedesktop.DBus.Properties"
+        self.__PROFILES_NAME = "net.hadess.PowerProfiles"
+        self.__PROFILES_PATH = "/net/hadess/PowerProfiles"
+        self.__NOTIFICATIONS = "org.freedesktop.Notifications"
+        self.__sys_bus = dbus.SystemBus()
 
         self.battery = None
-        self.notfy_intf = dbus.Interface(
-            dbus.SessionBus().get_object(self.NOTIFICATIONS, "/"+self.NOTIFICATIONS.replace(".", "/")), self.NOTIFICATIONS
+        self.__notfy_intf = dbus.Interface(
+            dbus.SessionBus().get_object(self.__NOTIFICATIONS, "/"+self.__NOTIFICATIONS.replace(".", "/")), self.__NOTIFICATIONS
         )
-        self.pwd = self.sys_bus.get_object(self.PROFILES_NAME, self.PROFILES_PATH)
-        self.pwd_interface = dbus.Interface(self.pwd, self.DBUS_PROPERTIES)
+        self.pwd = self.__sys_bus.get_object(self.__PROFILES_NAME, self.__PROFILES_PATH)
+        self.pwd_interface = dbus.Interface(self.pwd, self.__DBUS_PROPERTIES)
         #####
         self.active_profile = None
-        self.ps_profile = "power-saver"
-        self.bc_profile = "balanced"
-        self.detect_battery()
+        self._ps_profile = "power-saver"
+        self._bc_profile = "balanced"
+        self.__detect_battery()
         self.get_battery_percentage(self.battery)
         self.get_battery_state(self.battery)
 
-    def detect_battery(self) -> list:
-        upower_proxy = self.sys_bus.get_object(self.UPOWER_NAME, self.UPOWER_PATH)
-        upower_interface = dbus.Interface(upower_proxy, self.UPOWER_NAME)
+    def __detect_battery(self) -> list:
+        upower_proxy = self.__sys_bus.get_object(self.__UPOWER_NAME, self.__UPOWER_PATH)
+        upower_interface = dbus.Interface(upower_proxy, self.__UPOWER_NAME)
 
-        devices:list = upower_interface.EnumerateDevices()
+        devices = upower_interface.EnumerateDevices()
         self.battery = [device for device in devices if "battery" in device][0]
 
     def get_battery_percentage(self, battery) -> None:
-        battery_proxy = self.sys_bus.get_object(self.UPOWER_NAME, battery)
-        battery_proxy_interface = dbus.Interface(battery_proxy, self.DBUS_PROPERTIES)
+        battery_proxy = self.__sys_bus.get_object(self.__UPOWER_NAME, battery)
+        battery_proxy_interface = dbus.Interface(battery_proxy, self.__DBUS_PROPERTIES)
 
-        self.percentage = int(battery_proxy_interface.Get(self.UPOWER_NAME + ".Device", "Percentage"))
+        self.percentage = int(battery_proxy_interface.Get(self.__UPOWER_NAME + ".Device", "Percentage"))
 
     def get_battery_state(self, battery) -> None:
-        battery_proxy = self.sys_bus.get_object(self.UPOWER_NAME, battery)
-        battery_proxy_interface = dbus.Interface(battery_proxy, self.DBUS_PROPERTIES)
+        battery_proxy = self.__sys_bus.get_object(self.__UPOWER_NAME, battery)
+        battery_proxy_interface = dbus.Interface(battery_proxy, self.__DBUS_PROPERTIES)
 
-        state = int(battery_proxy_interface.Get(self.UPOWER_NAME + ".Device", "State"))
+        state = int(battery_proxy_interface.Get(self.__UPOWER_NAME + ".Device", "State"))
 
         if state == 1:
             self.state = "on_ac"
@@ -75,12 +75,12 @@ class batState():
     def set_powerprofile(self, profile: str) -> None:
         self.pwd_interface.Set("net.hadess.PowerProfiles", "ActiveProfile", profile)
 
-    def get_powerprofile(self):
+    def get_powerprofile(self) -> None:
         active_profile = self.pwd_interface.Get("net.hadess.PowerProfiles", "ActiveProfile")
         self.active_profile = active_profile.split(",")[0]
 
     def notify(self, message: str) -> None:
-        self.notfy_intf.Notify(
+        self.__notfy_intf.Notify(
             "", 0, "battery", "Battery Notification", f"{message}",
             [], {"critical": 1}, 5000
         )
@@ -103,12 +103,12 @@ def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
     while True:
 
         # check for power status, adjusting powerprofiles and brightness in consecuence
-        if bat_stat.state == "on_battery" and bat_stat.active_profile == bat_stat.bc_profile:
-            bat_stat.set_powerprofile(profile=bat_stat.ps_profile)
+        if bat_stat.state == "on_battery" and bat_stat.active_profile == bat_stat._bc_profile:
+            bat_stat.set_powerprofile(profile=bat_stat._ps_profile)
             bat_stat.set_brightness(bat_stat.BRIGHTNESS_BATTERY)
 
-        elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat.ps_profile:
-            bat_stat.set_powerprofile(profile=bat_stat.bc_profile)
+        elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat._ps_profile:
+            bat_stat.set_powerprofile(profile=bat_stat._bc_profile)
             bat_stat.set_brightness(bat_stat.BRIGHTNESS_AC)
 
         # check for level of battery to advice
