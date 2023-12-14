@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import sys
 from io import UnsupportedOperation
 from time import sleep
@@ -18,9 +19,14 @@ class batState():
     # Notification if battery over:
     MAX_BAT_TRIGGER = 80
     # Adjust to your needs, device can be diferent in your case
-    BRIGHT_DEVICE = "/sys/class/backlight/amdgpu_bl0/brightness"
+    # TODO: gets the appropiate device automatically
+
+    BRIGHTNES_BATTERY = "15"
+    # cpu boost
+    # BOOST = "/sys/devices/system/cpu/cpufreq/boost"
+
     # Brightness in battery mode
-    BRIGHTNESS_BATTERY = "40"
+    BRIGHTNESS_BATTERY = "15"
     # Brightnes on ac power
     BRIGHTNESS_AC = "80"
 
@@ -32,13 +38,17 @@ class batState():
         self.__PROFILES_NAME = "net.hadess.PowerProfiles"
         self.__PROFILES_PATH = "/net/hadess/PowerProfiles"
         self.__NOTIFICATIONS = "org.freedesktop.Notifications"
+        self.__BRIGHT_DEVICE = f"/sys/class/backlight/{self.__detect_backlight()}/brightness"
+        self.__BRIGHTNESS_MAX = f"/sys/class/backlight/{self.__detect_backlight()}/max_brightness"
         self.__sys_bus = dbus.SystemBus()
 
         self.battery = None
         self.__notfy_intf = dbus.Interface(
-            dbus.SessionBus().get_object(self.__NOTIFICATIONS, "/"+self.__NOTIFICATIONS.replace(".", "/")), self.__NOTIFICATIONS
+            dbus.SessionBus().get_object(self.__NOTIFICATIONS, "/" +
+                                         self.__NOTIFICATIONS.replace(".", "/")), self.__NOTIFICATIONS
         )
-        self.pwd = self.__sys_bus.get_object(self.__PROFILES_NAME, self.__PROFILES_PATH)
+        self.pwd = self.__sys_bus.get_object(
+            self.__PROFILES_NAME, self.__PROFILES_PATH)
         self.pwd_interface = dbus.Interface(self.pwd, self.__DBUS_PROPERTIES)
         #####
         self.active_profile = None
@@ -49,23 +59,32 @@ class batState():
         self.get_battery_state(self.battery)
 
     def __detect_battery(self) -> list:
-        upower_proxy = self.__sys_bus.get_object(self.__UPOWER_NAME, self.__UPOWER_PATH)
+        upower_proxy = self.__sys_bus.get_object(
+            self.__UPOWER_NAME, self.__UPOWER_PATH)
         upower_interface = dbus.Interface(upower_proxy, self.__UPOWER_NAME)
 
         devices = upower_interface.EnumerateDevices()
         self.battery = [device for device in devices if "battery" in device][0]
 
+    def __detect_backlight(self) -> str:
+        backlight = os.listdir("/sys/class/backlight")
+        return backlight[0]
+
     def get_battery_percentage(self, battery) -> None:
         battery_proxy = self.__sys_bus.get_object(self.__UPOWER_NAME, battery)
-        battery_proxy_interface = dbus.Interface(battery_proxy, self.__DBUS_PROPERTIES)
+        battery_proxy_interface = dbus.Interface(
+            battery_proxy, self.__DBUS_PROPERTIES)
 
-        self.percentage = int(battery_proxy_interface.Get(self.__UPOWER_NAME + ".Device", "Percentage"))
+        self.percentage = int(battery_proxy_interface.Get(
+            self.__UPOWER_NAME + ".Device", "Percentage"))
 
     def get_battery_state(self, battery) -> None:
         battery_proxy = self.__sys_bus.get_object(self.__UPOWER_NAME, battery)
-        battery_proxy_interface = dbus.Interface(battery_proxy, self.__DBUS_PROPERTIES)
+        battery_proxy_interface = dbus.Interface(
+            battery_proxy, self.__DBUS_PROPERTIES)
 
-        state = int(battery_proxy_interface.Get(self.__UPOWER_NAME + ".Device", "State"))
+        state = int(battery_proxy_interface.Get(
+            self.__UPOWER_NAME + ".Device", "State"))
 
         if state == 1:
             self.state = "on_ac"
@@ -73,10 +92,12 @@ class batState():
             self.state = "on_battery"
 
     def set_powerprofile(self, profile: str) -> None:
-        self.pwd_interface.Set("net.hadess.PowerProfiles", "ActiveProfile", profile)
+        self.pwd_interface.Set("net.hadess.PowerProfiles",
+                               "ActiveProfile", profile)
 
     def get_powerprofile(self) -> None:
-        active_profile = self.pwd_interface.Get("net.hadess.PowerProfiles", "ActiveProfile")
+        active_profile = self.pwd_interface.Get(
+            "net.hadess.PowerProfiles", "ActiveProfile")
         self.active_profile = active_profile.split(",")[0]
 
     def notify(self, message: str) -> None:
@@ -87,12 +108,28 @@ class batState():
 
     def set_brightness(self, brightness: int) -> None:
         try:
-            with open(self.BRIGHT_DEVICE, 'w') as bd:
+            with open(self.__BRIGHT_DEVICE, 'w') as bd:
                 bd.write(brightness)
         except UnsupportedOperation as e:
-            print(f"Error opening device {self.BRIGHT_DEVICE}\n")
+            print(f"Error opening device {self.__BRIGHT_DEVICE}\n")
             print(e)
             sys.exit(1)
+
+    # def set_boost(self) -> None:
+    #     try:
+    #         with open(self.BOOST, "w") as boost:
+    #             boost.write("1\n")
+    #     except PermissionError as e:
+    #         print(f"Error opening {self.BOOST}\n")
+    #         print(e)
+
+    # def unset_boost(self) -> None:
+    #     try:
+    #         with open(self.BOOST, "w") as boost:
+    #             boost.write("0\n")
+    #     except PermissionError as e:
+    #         print(f"Error opening {self.BOOST}\n")
+    #         print(e)
 
 
 def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
@@ -103,13 +140,15 @@ def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
     while True:
 
         # check for power status, adjusting powerprofiles and brightness in consecuence
-        if bat_stat.state == "on_battery" and bat_stat.active_profile == bat_stat._bc_profile:
+        if bat_stat.state == "on_battery" and bat_stat.active_profile != bat_stat._ps_profile:
             bat_stat.set_powerprofile(profile=bat_stat._ps_profile)
             bat_stat.set_brightness(bat_stat.BRIGHTNESS_BATTERY)
+            # bat_stat.unset_boost()
 
         elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat._ps_profile:
             bat_stat.set_powerprofile(profile=bat_stat._bc_profile)
             bat_stat.set_brightness(bat_stat.BRIGHTNESS_AC)
+            bat_stat.set_boost()
 
         # check for level of battery to advice
         elif bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
