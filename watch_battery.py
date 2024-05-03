@@ -18,17 +18,11 @@ class batState():
     MIN_BAT_TRIGGER = 30
     # Notification if battery over:
     MAX_BAT_TRIGGER = 80
-    # Adjust to your needs, device can be diferent in your case
-    # TODO: gets the appropiate device automatically
-
-    BRIGHTNES_BATTERY = "15"
-    # cpu boost
-    # BOOST = "/sys/devices/system/cpu/cpufreq/boost"
 
     # Brightness in battery mode
-    BRIGHTNESS_BATTERY = "25"
+    BRIGHTNESS_BATTERY = 25  # 25% of max brightness
     # Brightnes on ac power
-    BRIGHTNESS_AC = "80"
+    BRIGHTNESS_AC = 80  # 80% of max brightness
 
     def __init__(self) -> None:
 
@@ -70,6 +64,16 @@ class batState():
         backlight = os.listdir("/sys/class/backlight")
         return backlight[0]
 
+    # get max brightness
+    def get_max_brightness(self) -> int:
+        try:
+            with open(self.__BRIGHTNESS_MAX, 'r') as bm:
+                return int(bm.read())
+        except UnsupportedOperation as e:
+            print(f"Error opening device {self.__BRIGHTNESS_MAX}\n")
+            print(e)
+            sys.exit(1)  
+
     def get_battery_percentage(self, battery) -> None:
         battery_proxy = self.__sys_bus.get_object(self.__UPOWER_NAME, battery)
         battery_proxy_interface = dbus.Interface(
@@ -110,27 +114,11 @@ class batState():
     def set_brightness(self, brightness: int) -> None:
         try:
             with open(self.__BRIGHT_DEVICE, 'w') as bd:
-                bd.write(brightness)
+                bd.write(str(int(brightness)))
         except UnsupportedOperation as e:
             print(f"Error opening device {self.__BRIGHT_DEVICE}\n")
             print(e)
             sys.exit(1)
-
-    # def set_boost(self) -> None:
-    #     try:
-    #         with open(self.BOOST, "w") as boost:
-    #             boost.write("1\n")
-    #     except PermissionError as e:
-    #         print(f"Error opening {self.BOOST}\n")
-    #         print(e)
-
-    # def unset_boost(self) -> None:
-    #     try:
-    #         with open(self.BOOST, "w") as boost:
-    #             boost.write("0\n")
-    #     except PermissionError as e:
-    #         print(f"Error opening {self.BOOST}\n")
-    #         print(e)
 
 
 def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
@@ -143,13 +131,13 @@ def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
         # check for power status, adjusting powerprofiles and brightness in consecuence
         if bat_stat.state == "on_battery" and bat_stat.active_profile != bat_stat._ps_profile:
             bat_stat.set_powerprofile(profile=bat_stat._ps_profile)
-            bat_stat.set_brightness(bat_stat.BRIGHTNESS_BATTERY)
-            # bat_stat.unset_boost()
+            # bat_stat.set_brightness(bat_stat.BRIGHTNESS_BATTERY)
+            bat_stat.set_brightness((bat_stat.BRIGHTNESS_BATTERY / 100) * bat_stat.get_max_brightness())
 
         elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat._ps_profile:
             bat_stat.set_powerprofile(profile=bat_stat._bc_profile)
-            bat_stat.set_brightness(bat_stat.BRIGHTNESS_AC)
-            # bat_stat.set_boost()
+            # bat_stat.set_brightness(bat_stat.BRIGHTNESS_AC)
+            bat_stat.set_brightness((bat_stat.BRIGHTNESS_AC / 100) * bat_stat.get_max_brightness())
 
         # check for level of battery to advice
         elif bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
