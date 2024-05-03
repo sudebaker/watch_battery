@@ -26,7 +26,7 @@ class batState():
     # BOOST = "/sys/devices/system/cpu/cpufreq/boost"
 
     # Brightness in battery mode
-    BRIGHTNESS_BATTERY = "15"
+    BRIGHTNESS_BATTERY = "25"
     # Brightnes on ac power
     BRIGHTNESS_AC = "80"
 
@@ -86,7 +86,8 @@ class batState():
         state = int(battery_proxy_interface.Get(
             self.__UPOWER_NAME + ".Device", "State"))
 
-        if state == 1:
+        # state 5? could be on_ac?
+        if state == 1 or state == 5:
             self.state = "on_ac"
         elif state == 2:
             self.state = "on_battery"
@@ -148,7 +149,7 @@ def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
         elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat._ps_profile:
             bat_stat.set_powerprofile(profile=bat_stat._bc_profile)
             bat_stat.set_brightness(bat_stat.BRIGHTNESS_AC)
-            bat_stat.set_boost()
+            # bat_stat.set_boost()
 
         # check for level of battery to advice
         elif bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
