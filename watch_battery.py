@@ -20,7 +20,7 @@ class batState():
     MAX_BAT_TRIGGER = 80
 
     # Brightness in battery mode
-    BRIGHTNESS_BATTERY = 25  # 25% of max brightness
+    BRIGHTNESS_BATTERY = 30  # 25% of max brightness
     # Brightnes on ac power
     BRIGHTNESS_AC = 80  # 80% of max brightness
 
