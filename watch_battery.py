@@ -4,7 +4,7 @@ import os
 import sys
 from io import UnsupportedOperation
 from time import sleep
-
+import logging
 import dbus
 
 
@@ -56,12 +56,25 @@ class batState():
         self.get_battery_state(self.battery)
 
     def __detect_battery(self) -> list:
-        upower_proxy = self.__sys_bus.get_object(
-            self.__UPOWER_NAME, self.__UPOWER_PATH)
-        upower_interface = dbus.Interface(upower_proxy, self.__UPOWER_NAME)
+        """
+        Detects the battery device and stores it in the battery attribute
+        """
+        try:
+            upower_proxy = self.__sys_bus.get_object(
+                self.__UPOWER_NAME, self.__UPOWER_PATH)
+            upower_interface = dbus.Interface(upower_proxy, self.__UPOWER_NAME)
+        except dbus.exceptions.DBusException:
+            logging.error(
+                "Error connecting to UPower. Is UPower running? Exiting.")
+            sys.exit(1)
 
-        devices = upower_interface.EnumerateDevices()
-        self.battery = [device for device in devices if "battery" in device][0]
+        try:
+            devices = upower_interface.EnumerateDevices()
+            self.battery = [
+                device for device in devices if "battery" in device][0]
+        except IndexError:
+            logging.error("No battery found. Exiting.")
+            sys.exit(1)
 
     def __detect_backlight(self) -> str:
         backlight = os.listdir("/sys/class/backlight")
@@ -73,22 +86,36 @@ class batState():
             with open(self.__BRIGHTNESS_MAX, 'r') as bm:
                 return int(bm.read())
         except UnsupportedOperation as e:
-            print(f"Error opening device {self.__BRIGHTNESS_MAX}\n")
-            print(e)
+            logging.error(f"Error opening device {self.__BRIGHTNESS_MAX}\n")
+            logging.error(e)
             sys.exit(1)
 
     def get_battery_percentage(self, battery) -> None:
-        battery_proxy = self.__sys_bus.get_object(self.__UPOWER_NAME, battery)
-        battery_proxy_interface = dbus.Interface(
-            battery_proxy, self.__DBUS_PROPERTIES)
-
-        self.percentage = int(battery_proxy_interface.Get(
-            self.__UPOWER_NAME + ".Device", "Percentage"))
+        try:
+            battery_proxy = self.__sys_bus.get_object(
+                self.__UPOWER_NAME, battery)
+            battery_proxy_interface = dbus.Interface(
+                battery_proxy, self.__DBUS_PROPERTIES)
+        except dbus.exceptions.DBusException:
+            logging.error(
+                "Error connecting to UPower. Is UPower running? Exiting.")
+            sys.exit(1)
+        try:
+            self.percentage = int(battery_proxy_interface.Get(
+                self.__UPOWER_NAME + ".Device", "Percentage"))
+        except dbus.exceptions.DBusException:
+            logging.error("Error getting battery percentage. Exiting.")
+            sys.exit(1)
 
     def get_battery_state(self, battery) -> None:
-        battery_proxy = self.__sys_bus.get_object(self.__UPOWER_NAME, battery)
-        battery_proxy_interface = dbus.Interface(
-            battery_proxy, self.__DBUS_PROPERTIES)
+        try:
+            battery_proxy = self.__sys_bus.get_object(self.__UPOWER_NAME, battery)
+            battery_proxy_interface = dbus.Interface(
+                battery_proxy, self.__DBUS_PROPERTIES)
+        except dbus.exceptions.DBusException:
+            logging.error(
+                "Error connecting to UPower. Is UPower running? Exiting.")
+            sys.exit(1)
 
         state = int(battery_proxy_interface.Get(
             self.__UPOWER_NAME + ".Device", "State"))
@@ -100,22 +127,41 @@ class batState():
             self.state = "on_battery"
 
     def set_powerprofile(self, profile: str) -> None:
-        self.pwd_interface.Set("net.hadess.PowerProfiles",
-                               "ActiveProfile", profile)
+        try:
+            self.pwd_interface.Set(
+                "net.hadess.PowerProfiles", "ActiveProfile", profile
+            )
+        except dbus.exceptions.DBusException as e:
+            logging.error(f"Error setting power profile to {profile}")
+            logging.error(e)
+            sys.exit(1)
 
     def get_available_modes(self) -> None:
         # get available power profiles modes
-        available_modes = self.pwd_interface.Get(
-            "net.hadess.PowerProfiles", "Profiles")
+        try:
+            available_modes = self.pwd_interface.Get(
+                "net.hadess.PowerProfiles", "Profiles"
+            )
+        except dbus.exceptions.DBusException as e:
+            logging.error("Error getting available power profiles")
+            logging.error(e)
+            sys.exit(1)
+
         # Extract profile names and store them in a set
         self.available_modes = {
             str(mode[dbus.String('Profile')]) for mode in available_modes
         }
-        # print(f"Available modes: {self.available_modes}\n")
 
     def get_powerprofile(self) -> None:
-        active_profile = self.pwd_interface.Get(
-            "net.hadess.PowerProfiles", "ActiveProfile")
+        try:
+            active_profile = self.pwd_interface.Get(
+                "net.hadess.PowerProfiles", "ActiveProfile"
+            )
+        except dbus.exceptions.DBusException as e:
+            logging.error("Error getting active power profile")
+            logging.error(e)
+            sys.exit(1)
+
         self.active_profile = active_profile.split(",")[0]
 
     def notify(self, message: str) -> None:
@@ -129,8 +175,8 @@ class batState():
             with open(self.__BRIGHT_DEVICE, 'w') as bd:
                 bd.write(str(int(brightness)))
         except UnsupportedOperation as e:
-            print(f"Error opening device {self.__BRIGHT_DEVICE}\n")
-            print(e)
+            logging.error(f"Error opening device {self.__BRIGHT_DEVICE}\n")
+            logging.error(e)
             sys.exit(1)
 
 
