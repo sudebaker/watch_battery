@@ -40,8 +40,8 @@ class batState():
 
         self.battery = None
         self.__notfy_intf = dbus.Interface(
-            dbus.SessionBus().get_object(self.__NOTIFICATIONS, "/" +
-                                         self.__NOTIFICATIONS.replace(".", "/")), self.__NOTIFICATIONS
+            dbus.SessionBus().get_object(
+                self.__NOTIFICATIONS, "/" + self.__NOTIFICATIONS.replace(".", "/")), self.__NOTIFICATIONS
         )
         self.pwd = self.__sys_bus.get_object(
             self.__PROFILES_NAME, self.__PROFILES_PATH)
@@ -50,6 +50,7 @@ class batState():
         self.active_profile = None
         self._ps_profile = "power-saver"
         self._bc_profile = "balanced"
+        self._pf_profile = "performance"
         self.__detect_battery()
         self.get_battery_percentage(self.battery)
         self.get_battery_state(self.battery)
@@ -102,6 +103,16 @@ class batState():
         self.pwd_interface.Set("net.hadess.PowerProfiles",
                                "ActiveProfile", profile)
 
+    def get_available_modes(self) -> None:
+        # get available power profiles modes
+        available_modes = self.pwd_interface.Get(
+            "net.hadess.PowerProfiles", "Profiles")
+        # Extract profile names and store them in a set
+        self.available_modes = {
+            str(mode[dbus.String('Profile')]) for mode in available_modes
+        }
+        # print(f"Available modes: {self.available_modes}\n")
+
     def get_powerprofile(self) -> None:
         active_profile = self.pwd_interface.Get(
             "net.hadess.PowerProfiles", "ActiveProfile")
@@ -127,6 +138,7 @@ def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
     """seconds to sleep and default power-profile"""
 
     bat_stat = batState()
+    bat_stat.get_available_modes()
     # Main loop
     while True:
 
@@ -138,7 +150,11 @@ def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
                 (bat_stat.BRIGHTNESS_BATTERY / 100) * bat_stat.get_max_brightness())
 
         elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat._ps_profile:
-            bat_stat.set_powerprofile(profile=bat_stat._bc_profile)
+            if bat_stat._pf_profile in bat_stat.available_modes:
+                bat_stat.set_powerprofile(profile=bat_stat._pf_profile)
+                # print(bat_stat.active_profile, bat_stat._pf_profile)
+            else:
+                bat_stat.set_powerprofile(profile=bat_stat._bc_profile)
             # bat_stat.set_brightness(bat_stat.BRIGHTNESS_AC)
             bat_stat.set_brightness(
                 (bat_stat.BRIGHTNESS_AC / 100) * bat_stat.get_max_brightness())
@@ -146,14 +162,12 @@ def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
         # check for level of battery to advice
         elif bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
             bat_stat.notify(
-                message=f"Plug the charger, battery below {
-                    bat_stat.MIN_BAT_TRIGGER}%"
+                message=f"Plug the charger, battery below {bat_stat.MIN_BAT_TRIGGER}%"
             )
 
         elif bat_stat.percentage > bat_stat.MAX_BAT_TRIGGER and bat_stat.state == "on_ac":
             bat_stat.notify(
-                message=f"Unplug the charger, battery over {
-                    bat_stat.MAX_BAT_TRIGGER}%"
+                message=f"Unplug the charger, battery over {bat_stat.MAX_BAT_TRIGGER}%"
             )
 
         sleep(time_to_sleep)
