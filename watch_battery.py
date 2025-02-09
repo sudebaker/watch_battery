@@ -25,7 +25,12 @@ class batState():
     BRIGHTNESS_AC = 80  # 80% of max brightness
 
     def __init__(self) -> None:
+        """
+        Initializes the batState class.
 
+        Sets up the necessary DBus connections, detects the battery and backlight devices,
+        and retrieves the initial battery percentage and state.
+        """
         self.__UPOWER_NAME = "org.freedesktop.UPower"
         self.__UPOWER_PATH = "/org/freedesktop/UPower"
         self.__DBUS_PROPERTIES = "org.freedesktop.DBus.Properties"
@@ -77,11 +82,20 @@ class batState():
             sys.exit(1)
 
     def __detect_backlight(self) -> str:
+        """
+        Detects the backlight device.
+        """
         backlight = os.listdir("/sys/class/backlight")
         return backlight[0]
 
     # get max brightness
     def get_max_brightness(self) -> int:
+        """
+        Gets the maximum brightness value from the backlight device.
+
+        Returns:
+            int: The maximum brightness value.
+        """
         try:
             with open(self.__BRIGHTNESS_MAX, 'r') as bm:
                 return int(bm.read())
@@ -91,6 +105,12 @@ class batState():
             sys.exit(1)
 
     def get_battery_percentage(self, battery) -> None:
+        """
+        Gets the battery percentage from UPower.
+
+        Args:
+            battery (str): The battery device path.
+        """
         try:
             battery_proxy = self.__sys_bus.get_object(
                 self.__UPOWER_NAME, battery)
@@ -108,6 +128,12 @@ class batState():
             sys.exit(1)
 
     def get_battery_state(self, battery) -> None:
+        """
+        Gets the battery state from UPower.
+
+        Args:
+            battery (str): The battery device path.
+        """
         try:
             battery_proxy = self.__sys_bus.get_object(self.__UPOWER_NAME, battery)
             battery_proxy_interface = dbus.Interface(
@@ -127,6 +153,12 @@ class batState():
             self.state = "on_battery"
 
     def set_powerprofile(self, profile: str) -> None:
+        """
+        Sets the power profile using PowerProfiles daemon.
+
+        Args:
+            profile (str): The power profile to set.
+        """
         try:
             self.pwd_interface.Set(
                 "net.hadess.PowerProfiles", "ActiveProfile", profile
@@ -137,7 +169,9 @@ class batState():
             sys.exit(1)
 
     def get_available_modes(self) -> None:
-        # get available power profiles modes
+        """
+        Gets the available power profiles from PowerProfiles daemon.
+        """
         try:
             available_modes = self.pwd_interface.Get(
                 "net.hadess.PowerProfiles", "Profiles"
@@ -153,6 +187,9 @@ class batState():
         }
 
     def get_powerprofile(self) -> None:
+        """
+        Gets the active power profile from PowerProfiles daemon.
+        """
         try:
             active_profile = self.pwd_interface.Get(
                 "net.hadess.PowerProfiles", "ActiveProfile"
@@ -165,12 +202,24 @@ class batState():
         self.active_profile = active_profile.split(",")[0]
 
     def notify(self, message: str) -> None:
+        """
+        Sends a notification using the org.freedesktop.Notifications interface.
+
+        Args:
+            message (str): The message to display in the notification.
+        """
         self.__notfy_intf.Notify(
             "", 0, "battery", "Battery Notification", f"{message}",
             [], {"critical": 1}, 5000
         )
 
     def set_brightness(self, brightness: int) -> None:
+        """
+        Sets the brightness of the backlight device.
+
+        Args:
+            brightness (int): The brightness value to set.
+        """
         try:
             with open(self.__BRIGHT_DEVICE, 'w') as bd:
                 bd.write(str(int(brightness)))
