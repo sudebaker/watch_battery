@@ -37,10 +37,10 @@ class batState():
     # Notification if battery over:
     MAX_BAT_TRIGGER = 80
 
-    # Brightness in battery mode
-    BRIGHTNESS_BATTERY = 30  # 25% of max brightness
-    # Brightnes on ac power
-    BRIGHTNESS_AC = 80  # 80% of max brightness
+    # Brightness level as percentage of max brightness
+    BRIGHTNESS_BATTERY = 30  # 30% on battery power
+    # Brightness on AC power
+    BRIGHTNESS_AC = 80  # 80% on AC power
 
     def __init__(self) -> None:
         """
@@ -73,9 +73,10 @@ class batState():
         self.pwd_interface = dbus.Interface(self.pwd, self.__DBUS_PROPERTIES)
         #####
         self.active_profile = None
-        self._ps_profile = "power-saver"
-        self._bc_profile = "balanced"
-        self._pf_profile = "performance"
+        # Profile name constants (matching power-profiles-daemon)
+        self.PROFILE_POWER_SAVER = "power-saver"
+        self.PROFILE_BALANCED = "balanced"
+        self.PROFILE_PERFORMANCE = "performance"
         # Notification tracking to prevent spam
         self._last_low_notification = 0
         self._last_high_notification = 0
@@ -326,16 +327,16 @@ def watch_battery(time_to_sleep: int = 5) -> None:
     while not _shutdown_requested:
 
         # check for power status, adjusting powerprofiles and brightness in consequence
-        if bat_stat.state == "on_battery" and bat_stat.active_profile != bat_stat._ps_profile:
-            bat_stat.set_powerprofile(profile=bat_stat._ps_profile)
+        if bat_stat.state == "on_battery" and bat_stat.active_profile != bat_stat.PROFILE_POWER_SAVER:
+            bat_stat.set_powerprofile(profile=bat_stat.PROFILE_POWER_SAVER)
             bat_stat.set_brightness(
                 (bat_stat.BRIGHTNESS_BATTERY / 100) * bat_stat.get_max_brightness())
 
-        elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat._ps_profile:
-            if bat_stat._pf_profile in bat_stat.available_modes:
-                bat_stat.set_powerprofile(profile=bat_stat._pf_profile)
+        elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat.PROFILE_POWER_SAVER:
+            if bat_stat.PROFILE_PERFORMANCE in bat_stat.available_modes:
+                bat_stat.set_powerprofile(profile=bat_stat.PROFILE_PERFORMANCE)
             else:
-                bat_stat.set_powerprofile(profile=bat_stat._bc_profile)
+                bat_stat.set_powerprofile(profile=bat_stat.PROFILE_BALANCED)
             bat_stat.set_brightness(
                 (bat_stat.BRIGHTNESS_AC / 100) * bat_stat.get_max_brightness())
 
