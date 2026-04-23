@@ -48,6 +48,9 @@ class batState():
         self.__BRIGHTNESS_MAX = f"/sys/class/backlight/{backlight_device}/max_brightness"
         self.__sys_bus = dbus.SystemBus()
 
+        # Cache max_brightness to avoid repeated disk reads
+        self.__cached_max_brightness = self.__read_max_brightness()
+
         self.battery = None
         self.__notfy_intf = dbus.Interface(
             dbus.SessionBus().get_object(
@@ -108,21 +111,24 @@ class batState():
 
         return backlight[0]
 
-    # get max brightness
+    def __read_max_brightness(self) -> int:
+        """Internal: read max brightness from hardware (once)."""
+        try:
+            with open(self.__BRIGHTNESS_MAX, 'r') as bm:
+                return int(bm.read())
+        except (UnsupportedOperation, OSError, IOError, ValueError) as e:
+            logging.error(f"Error reading max brightness from {self.__BRIGHTNESS_MAX}")
+            logging.error(e)
+            sys.exit(1)
+
     def get_max_brightness(self) -> int:
         """
-        Gets the maximum brightness value from the backlight device.
+        Gets the cached maximum brightness value.
 
         Returns:
             int: The maximum brightness value.
         """
-        try:
-            with open(self.__BRIGHTNESS_MAX, 'r') as bm:
-                return int(bm.read())
-        except UnsupportedOperation as e:
-            logging.error(f"Error opening device {self.__BRIGHTNESS_MAX}\n")
-            logging.error(e)
-            sys.exit(1)
+        return self.__cached_max_brightness
 
     def get_battery_percentage(self, battery) -> None:
         """
