@@ -4,6 +4,7 @@ import os
 import sys
 from io import UnsupportedOperation
 from time import sleep
+import time
 import logging
 import dbus
 
@@ -60,6 +61,10 @@ class batState():
         self._ps_profile = "power-saver"
         self._bc_profile = "balanced"
         self._pf_profile = "performance"
+        # Notification tracking to prevent spam
+        self._last_low_notification = 0
+        self._last_high_notification = 0
+        self._notification_cooldown = 300  # 5 minutes between same notification
         self.__detect_battery()
         self.get_battery_percentage(self.battery)
         self.get_battery_state(self.battery)
@@ -216,16 +221,29 @@ class batState():
 
         self.active_profile = active_profile.split(",")[0]
 
-    def notify(self, message: str) -> None:
+    def notify(self, message: str, notification_type: str = "generic") -> None:
         """
         Sends a notification using the org.freedesktop.Notifications interface.
+        Rate-limited to prevent notification spam.
 
         Args:
             message (str): The message to display in the notification.
+            notification_type (str): Type of notification for cooldown tracking.
         """
+        current_time = time.time()
+
+        if notification_type == "low_battery":
+            if current_time - self._last_low_notification < self._notification_cooldown:
+                return
+            self._last_low_notification = current_time
+        elif notification_type == "high_battery":
+            if current_time - self._last_high_notification < self._notification_cooldown:
+                return
+            self._last_high_notification = current_time
+
         self.__notfy_intf.Notify(
             "", 0, "battery", "Battery Notification", f"{message}",
-            [], {"critical": 1}, 5000
+            [], {"urgency": 1}, 5000
         )
 
     def set_brightness(self, brightness: int) -> None:
@@ -272,12 +290,14 @@ def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
         # check for level of battery to advice
         elif bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
             bat_stat.notify(
-                message=f"Plug the charger, battery below {bat_stat.MIN_BAT_TRIGGER}%"
+                message=f"Plug the charger, battery below {bat_stat.MIN_BAT_TRIGGER}%",
+                notification_type="low_battery"
             )
 
         elif bat_stat.percentage > bat_stat.MAX_BAT_TRIGGER and bat_stat.state == "on_ac":
             bat_stat.notify(
-                message=f"Unplug the charger, battery over {bat_stat.MAX_BAT_TRIGGER}%"
+                message=f"Unplug the charger, battery over {bat_stat.MAX_BAT_TRIGGER}%",
+                notification_type="high_battery"
             )
 
         sleep(time_to_sleep)
