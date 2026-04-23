@@ -2,11 +2,23 @@
 
 import os
 import sys
+import signal
 from io import UnsupportedOperation
 from time import sleep
 import time
 import logging
 import dbus
+
+
+# Global flag for graceful shutdown
+_shutdown_requested = False
+
+
+def _signal_handler(signum, frame):
+    """Handle shutdown signals gracefully."""
+    global _shutdown_requested
+    logging.info(f"Received signal {signum}, shutting down gracefully...")
+    _shutdown_requested = True
 
 
 class BatteryMonitorError(Exception):
@@ -293,27 +305,29 @@ def watch_battery(time_to_sleep: int = 5) -> None:
 
     bat_stat = batState()
     bat_stat.get_available_modes()
-    # Main loop
-    while True:
 
-        # check for power status, adjusting powerprofiles and brightness in consecuence
+    # Register signal handlers
+    signal.signal(signal.SIGTERM, _signal_handler)
+    signal.signal(signal.SIGINT, _signal_handler)
+
+    # Main loop
+    while not _shutdown_requested:
+
+        # check for power status, adjusting powerprofiles and brightness in consequence
         if bat_stat.state == "on_battery" and bat_stat.active_profile != bat_stat._ps_profile:
             bat_stat.set_powerprofile(profile=bat_stat._ps_profile)
-            # bat_stat.set_brightness(bat_stat.BRIGHTNESS_BATTERY)
             bat_stat.set_brightness(
                 (bat_stat.BRIGHTNESS_BATTERY / 100) * bat_stat.get_max_brightness())
 
         elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat._ps_profile:
             if bat_stat._pf_profile in bat_stat.available_modes:
                 bat_stat.set_powerprofile(profile=bat_stat._pf_profile)
-                # print(bat_stat.active_profile, bat_stat._pf_profile)
             else:
                 bat_stat.set_powerprofile(profile=bat_stat._bc_profile)
-            # bat_stat.set_brightness(bat_stat.BRIGHTNESS_AC)
             bat_stat.set_brightness(
                 (bat_stat.BRIGHTNESS_AC / 100) * bat_stat.get_max_brightness())
 
-        # check for level of battery to advice
+        # check for level of battery to advise
         elif bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
             bat_stat.notify(
                 message=f"Plug the charger, battery below {bat_stat.MIN_BAT_TRIGGER}%",
@@ -326,11 +340,19 @@ def watch_battery(time_to_sleep: int = 5) -> None:
                 notification_type="high_battery"
             )
 
-        sleep(time_to_sleep)
-        # getting current state
-        bat_stat.get_powerprofile()
-        bat_stat.get_battery_percentage(bat_stat.battery)
-        bat_stat.get_battery_state(bat_stat.battery)
+        # Sleep with interruptible intervals
+        for _ in range(time_to_sleep):
+            if _shutdown_requested:
+                break
+            sleep(1)
+
+        if not _shutdown_requested:
+            # getting current state
+            bat_stat.get_powerprofile()
+            bat_stat.get_battery_percentage(bat_stat.battery)
+            bat_stat.get_battery_state(bat_stat.battery)
+
+    logging.info("watch_battery daemon stopped.")
 
 
 if __name__ == "__main__":
