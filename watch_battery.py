@@ -150,6 +150,8 @@ class batState():
     def get_battery_state(self, battery) -> None:
         """
         Gets the battery state from UPower.
+        UPower states: 1=charging, 2=discharging, 3=empty, 4=full,
+                      5=charge pending, 6=discharge pending, 7=unknown
 
         Args:
             battery (str): The battery device path.
@@ -166,10 +168,18 @@ class batState():
         state = int(battery_proxy_interface.Get(
             self.__UPOWER_NAME + ".Device", "State"))
 
-        # state 5? could be on_ac?
-        if state == 1 or state == 5:
+        # Map UPower states to internal state
+        if state in [1, 5]:  # Charging or Charge Pending
             self.state = "on_ac"
-        elif state == 2:
+        elif state in [2, 6]:  # Discharging or Discharge Pending
+            self.state = "on_battery"
+        elif state == 4:  # Fully charged (treat as on AC)
+            self.state = "on_ac"
+        elif state == 3:  # Empty
+            logging.warning("Battery is empty!")
+            self.state = "on_battery"
+        else:  # Unknown (7) or any other
+            logging.warning(f"Unknown battery state: {state}, assuming on_battery")
             self.state = "on_battery"
 
     def set_powerprofile(self, profile: str) -> None:
