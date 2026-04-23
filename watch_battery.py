@@ -332,31 +332,42 @@ def watch_battery(time_to_sleep: int = 5) -> None:
     signal.signal(signal.SIGTERM, _signal_handler)
     signal.signal(signal.SIGINT, _signal_handler)
 
+    # Get initial state before entering loop
+    bat_stat.get_powerprofile()
+    bat_stat.get_battery_percentage(bat_stat.battery)
+    bat_stat.get_battery_state(bat_stat.battery)
+
+    logging.info(f"Initial State: {bat_stat.state}, Profile: {bat_stat.active_profile}, Percentage: {bat_stat.percentage}, Available: {bat_stat.available_modes}")
+
     # Main loop
     while not _shutdown_requested:
 
-        # check for power status, adjusting powerprofiles and brightness in consequence
+        # Handle battery -> power-saver
         if bat_stat.state == "on_battery" and bat_stat.active_profile != bat_stat.PROFILE_POWER_SAVER:
+            logging.info("Battery mode: setting power-saver profile and dim brightness")
             bat_stat.set_powerprofile(profile=bat_stat.PROFILE_POWER_SAVER)
             bat_stat.set_brightness(
                 int((bat_stat.BRIGHTNESS_BATTERY / 100) * bat_stat.get_max_brightness()))
 
-        elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat.PROFILE_POWER_SAVER:
-            if bat_stat.PROFILE_PERFORMANCE in bat_stat.available_modes:
+        # Handle AC -> performance/balanced (independent of previous state)
+        if bat_stat.state == "on_ac":
+            if bat_stat.active_profile != bat_stat.PROFILE_PERFORMANCE and bat_stat.PROFILE_PERFORMANCE in bat_stat.available_modes:
+                logging.info("AC mode: setting performance profile")
                 bat_stat.set_powerprofile(profile=bat_stat.PROFILE_PERFORMANCE)
-            else:
+            elif bat_stat.active_profile == bat_stat.PROFILE_POWER_SAVER:
+                logging.info("AC mode: switching from power-saver to balanced")
                 bat_stat.set_powerprofile(profile=bat_stat.PROFILE_BALANCED)
             bat_stat.set_brightness(
                 int((bat_stat.BRIGHTNESS_AC / 100) * bat_stat.get_max_brightness()))
 
-        # check for level of battery to advise
-        elif bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
+        # Notification checks (only when on battery and low or on AC and high)
+        if bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
             bat_stat.notify(
                 message=f"Plug the charger, battery below {bat_stat.MIN_BAT_TRIGGER}%",
                 notification_type="low_battery"
             )
 
-        elif bat_stat.percentage > bat_stat.MAX_BAT_TRIGGER and bat_stat.state == "on_ac":
+        if bat_stat.percentage > bat_stat.MAX_BAT_TRIGGER and bat_stat.state == "on_ac":
             bat_stat.notify(
                 message=f"Unplug the charger, battery over {bat_stat.MAX_BAT_TRIGGER}%",
                 notification_type="high_battery"
@@ -373,6 +384,7 @@ def watch_battery(time_to_sleep: int = 5) -> None:
             bat_stat.get_powerprofile()
             bat_stat.get_battery_percentage(bat_stat.battery)
             bat_stat.get_battery_state(bat_stat.battery)
+            logging.info(f"Loop State: {bat_stat.state}, Profile: {bat_stat.active_profile}, Percentage: {bat_stat.percentage}")
 
     logging.info("watch_battery daemon stopped.")
 
