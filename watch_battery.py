@@ -86,24 +86,24 @@ class batState():
 
     def __detect_battery(self) -> list:
         """
-        Detects the battery device and stores it in the battery attribute
+        Detects the battery device and stores it in the battery attribute.
+
+        Raises:
+            BatteryMonitorError: If UPower is not running or no battery found.
         """
         try:
             upower_proxy = self.__sys_bus.get_object(
                 self.__UPOWER_NAME, self.__UPOWER_PATH)
             upower_interface = dbus.Interface(upower_proxy, self.__UPOWER_NAME)
-        except dbus.exceptions.DBusException:
-            logging.error(
-                "Error connecting to UPower. Is UPower running? Exiting.")
-            sys.exit(1)
+        except dbus.exceptions.DBusException as e:
+            raise BatteryMonitorError("Error connecting to UPower. Is UPower running?") from e
 
         try:
             devices = upower_interface.EnumerateDevices()
             self.battery = [
                 device for device in devices if "battery" in device][0]
         except IndexError:
-            logging.error("No battery found. Exiting.")
-            sys.exit(1)
+            raise BatteryMonitorError("No battery found on this system.")
 
     def __detect_backlight(self) -> str:
         """
@@ -356,4 +356,18 @@ def watch_battery(time_to_sleep: int = 5) -> None:
 
 
 if __name__ == "__main__":
-    watch_battery(time_to_sleep=10)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    try:
+        watch_battery(time_to_sleep=10)
+    except BatteryMonitorError as e:
+        logging.error(f"Failed to start battery monitor: {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        logging.info("Interrupted by user.")
+        sys.exit(0)
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        sys.exit(1)
