@@ -262,8 +262,18 @@ class batState():
             sys.exit(1)
 
 
-def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
-    """seconds to sleep and default power-profile"""
+def watch_battery(time_to_sleep: int = 5) -> None:
+    """
+    Main daemon loop for battery monitoring.
+
+    Automatically manages:
+    - Power profiles (power-saver on battery, performance on AC)
+    - Screen brightness based on power source
+    - Battery level notifications with rate limiting
+
+    Args:
+        time_to_sleep: Seconds between battery state checks (default: 5)
+    """
 
     bat_stat = batState()
     bat_stat.get_available_modes()
