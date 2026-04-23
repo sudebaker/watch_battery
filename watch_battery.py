@@ -159,16 +159,14 @@ class batState():
                 self.__UPOWER_NAME, battery)
             battery_proxy_interface = dbus.Interface(
                 battery_proxy, self.__DBUS_PROPERTIES)
-        except dbus.exceptions.DBusException:
-            logging.error(
-                "Error connecting to UPower. Is UPower running? Exiting.")
-            sys.exit(1)
+        except dbus.exceptions.DBusException as e:
+            logging.warning(f"Error connecting to UPower: {e}")
+            return
         try:
             self.percentage = int(battery_proxy_interface.Get(
                 self.__UPOWER_NAME + ".Device", "Percentage"))
-        except dbus.exceptions.DBusException:
-            logging.error("Error getting battery percentage. Exiting.")
-            sys.exit(1)
+        except dbus.exceptions.DBusException as e:
+            logging.warning(f"Error getting battery percentage: {e}")
 
     def get_battery_state(self, battery) -> None:
         """
@@ -184,13 +182,14 @@ class batState():
                 self.__UPOWER_NAME, battery)
             battery_proxy_interface = dbus.Interface(
                 battery_proxy, self.__DBUS_PROPERTIES)
-        except dbus.exceptions.DBusException:
-            logging.error(
-                "Error connecting to UPower. Is UPower running? Exiting.")
-            sys.exit(1)
-
-        state = int(battery_proxy_interface.Get(
-            self.__UPOWER_NAME + ".Device", "State"))
+            state = int(battery_proxy_interface.Get(
+                self.__UPOWER_NAME + ".Device", "State"))
+        except dbus.exceptions.DBusException as e:
+            logging.warning(f"Error getting battery state: {e}")
+            return
+        except ValueError as e:
+            logging.warning(f"Error parsing battery state: {e}")
+            return
 
         # Map UPower states to internal state
         if state in [1, 5]:  # Charging or Charge Pending
@@ -249,12 +248,11 @@ class batState():
             active_profile = self.pwd_interface.Get(
                 "net.hadess.PowerProfiles", "ActiveProfile"
             )
+            self.active_profile = active_profile.split(",")[0]
         except dbus.exceptions.DBusException as e:
-            logging.error("Error getting active power profile")
-            logging.error(e)
-            sys.exit(1)
-
-        self.active_profile = active_profile.split(",")[0]
+            logging.warning(f"Error getting active power profile: {e}")
+        except Exception as e:
+            logging.warning(f"Unexpected error getting power profile: {e}")
 
     def notify(self, message: str, notification_type: str = "generic") -> None:
         """
