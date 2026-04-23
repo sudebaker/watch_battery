@@ -8,6 +8,11 @@ import logging
 import dbus
 
 
+class BatteryMonitorError(Exception):
+    """Custom exception for battery monitor initialization failures."""
+    pass
+
+
 class batState():
     """Controls battery percentage,state and daemon profiles """
 
@@ -83,8 +88,19 @@ class batState():
     def __detect_backlight(self) -> str:
         """
         Detects the backlight device.
+
+        Raises:
+            BatteryMonitorError: If no backlight devices found.
         """
-        backlight = os.listdir("/sys/class/backlight")
+        backlight_path = "/sys/class/backlight"
+        try:
+            backlight = os.listdir(backlight_path)
+        except FileNotFoundError:
+            raise BatteryMonitorError(f"Backlight directory not found: {backlight_path}")
+
+        if not backlight:
+            raise BatteryMonitorError(f"No backlight devices found in {backlight_path}")
+
         return backlight[0]
 
     # get max brightness
