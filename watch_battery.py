@@ -279,15 +279,27 @@ class batState():
         Sets the brightness of the backlight device.
 
         Args:
-            brightness (int): The brightness value to set.
+            brightness (int): The brightness value to set (0-100 as percentage of max).
+
+        Raises:
+            ValueError: If brightness is outside valid range.
         """
+        if not isinstance(brightness, (int, float)):
+            raise ValueError(f"Brightness must be numeric, got {type(brightness)}")
+
+        max_brightness = self.get_max_brightness()
+
+        # Clamp to valid range
+        brightness = max(0, min(int(brightness), max_brightness))
+
         try:
             with open(self.__BRIGHT_DEVICE, 'w') as bd:
-                bd.write(str(int(brightness)))
-        except UnsupportedOperation as e:
-            logging.error(f"Error opening device {self.__BRIGHT_DEVICE}\n")
+                bd.write(str(brightness))
+            logging.debug(f"Brightness set to {brightness}")
+        except (UnsupportedOperation, OSError, IOError, PermissionError) as e:
+            logging.error(f"Error writing to brightness device {self.__BRIGHT_DEVICE}")
             logging.error(e)
-            sys.exit(1)
+            raise BatteryMonitorError("Failed to set brightness - check permissions") from e
 
 
 def watch_battery(time_to_sleep: int = 5) -> None:
