@@ -357,6 +357,12 @@ def watch_battery(time_to_sleep: int = 5) -> None:
             elif bat_stat.active_profile == bat_stat.PROFILE_POWER_SAVER:
                 logging.info("AC mode: switching from power-saver to balanced")
                 bat_stat.set_powerprofile(profile=bat_stat.PROFILE_BALANCED)
+
+        # ALWAYS adjust brightness based on power source
+        if bat_stat.state == "on_battery":
+            bat_stat.set_brightness(
+                int((bat_stat.BRIGHTNESS_BATTERY / 100) * bat_stat.get_max_brightness()))
+        elif bat_stat.state == "on_ac":
             bat_stat.set_brightness(
                 int((bat_stat.BRIGHTNESS_AC / 100) * bat_stat.get_max_brightness()))
 
