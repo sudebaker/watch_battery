@@ -84,6 +84,7 @@ class batState():
         self.__detect_battery()
         self.get_battery_percentage(self.battery)
         self.get_battery_state(self.battery)
+        print(f"Init complete - battery: {self.battery}, state: {self.state}, percentage: {self.percentage}", flush=True)
 
     def __detect_battery(self) -> None:
         """
@@ -148,79 +149,42 @@ class batState():
         return self.__cached_max_brightness
 
     def get_battery_percentage(self, battery) -> None:
-        """
-        Gets the battery percentage from UPower.
-
-        Args:
-            battery (str): The battery device path.
-        """
         try:
-            battery_proxy = self.__sys_bus.get_object(
-                self.__UPOWER_NAME, battery)
-            battery_proxy_interface = dbus.Interface(
-                battery_proxy, self.__DBUS_PROPERTIES)
-        except dbus.exceptions.DBusException as e:
-            logging.warning(f"Error connecting to UPower: {e}")
-            return
-        try:
-            self.percentage = int(battery_proxy_interface.Get(
-                self.__UPOWER_NAME + ".Device", "Percentage"))
-        except dbus.exceptions.DBusException as e:
-            logging.warning(f"Error getting battery percentage: {e}")
+            battery_proxy = self.__sys_bus.get_object(self.__UPOWER_NAME, battery)
+            battery_proxy_interface = dbus.Interface(battery_proxy, self.__DBUS_PROPERTIES)
+            self.percentage = int(battery_proxy_interface.Get(self.__UPOWER_NAME + ".Device", "Percentage"))
+        except Exception as e:
+            print(f"ERROR getting battery percentage: {e}", flush=True)
 
     def get_battery_state(self, battery) -> None:
-        """
-        Gets the battery state from UPower.
-        UPower states: 1=charging, 2=discharging, 3=empty, 4=full,
-                      5=charge pending, 6=discharge pending, 7=unknown
-
-        Args:
-            battery (str): The battery device path.
-        """
         try:
-            battery_proxy = self.__sys_bus.get_object(
-                self.__UPOWER_NAME, battery)
-            battery_proxy_interface = dbus.Interface(
-                battery_proxy, self.__DBUS_PROPERTIES)
-            state = int(battery_proxy_interface.Get(
-                self.__UPOWER_NAME + ".Device", "State"))
-        except dbus.exceptions.DBusException as e:
-            logging.warning(f"Error getting battery state: {e}")
-            return
-        except ValueError as e:
-            logging.warning(f"Error parsing battery state: {e}")
+            battery_proxy = self.__sys_bus.get_object(self.__UPOWER_NAME, battery)
+            battery_proxy_interface = dbus.Interface(battery_proxy, self.__DBUS_PROPERTIES)
+            state = int(battery_proxy_interface.Get(self.__UPOWER_NAME + ".Device", "State"))
+        except Exception as e:
+            print(f"ERROR getting battery state: {e}", flush=True)
             return
 
-        # Map UPower states to internal state
         if state in [1, 5]:  # Charging or Charge Pending
             self.state = "on_ac"
         elif state in [2, 6]:  # Discharging or Discharge Pending
             self.state = "on_battery"
-        elif state == 4:  # Fully charged (treat as on AC)
+        elif state == 4:  # Fully charged
             self.state = "on_ac"
-        elif state == 3:  # Empty
-            logging.warning("Battery is empty!")
-            self.state = "on_battery"
-        else:  # Unknown (7) or any other
-            logging.warning(
-                f"Unknown battery state: {state}, assuming on_battery")
+        else:
             self.state = "on_battery"
 
     def set_powerprofile(self, profile: str) -> None:
         """
         Sets the power profile using PowerProfiles daemon.
-
-        Args:
-            profile (str): The power profile to set.
         """
         try:
             self.pwd_interface.Set(
                 "net.hadess.PowerProfiles", "ActiveProfile", profile
             )
+            print(f"Set power profile to: {profile}", flush=True)
         except dbus.exceptions.DBusException as e:
-            logging.error(f"Error setting power profile to {profile}")
-            logging.error(e)
-            sys.exit(1)
+            print(f"ERROR setting power profile: {e}", flush=True)
 
     def get_available_modes(self) -> None:
         """
@@ -231,14 +195,16 @@ class batState():
                 "net.hadess.PowerProfiles", "Profiles"
             )
         except dbus.exceptions.DBusException as e:
-            logging.error("Error getting available power profiles")
-            logging.error(e)
-            sys.exit(1)
+            print(f"ERROR getting available power profiles: {e}", flush=True)
+            self.available_modes = {"balanced", "power-saver", "performance"}
+            return
 
         # Extract profile names and store them in a set
         self.available_modes = {
             str(mode[dbus.String('Profile')]) for mode in available_modes
         }
+        print(f"Available modes set to: {self.available_modes}", flush=True)
+        return
 
     def get_powerprofile(self) -> None:
         """
@@ -304,28 +270,19 @@ class batState():
                 bd.write(str(brightness))
             logging.info(f"Brightness successfully set to {brightness}")
         except (UnsupportedOperation, OSError, IOError, PermissionError) as e:
-            logging.error(
-                f"Error writing to brightness device {self.__BRIGHT_DEVICE}")
-            logging.error(e)
-            raise BatteryMonitorError(
-                "Failed to set brightness - check permissions") from e
+            logging.error(f"Error writing to brightness device: {e}")
 
 
 def watch_battery(time_to_sleep: int = 5) -> None:
     """
     Main daemon loop for battery monitoring.
-
-    Automatically manages:
-    - Power profiles (power-saver on battery, performance on AC)
-    - Screen brightness based on power source
-    - Battery level notifications with rate limiting
-
-    Args:
-        time_to_sleep: Seconds between battery state checks (default: 5)
     """
-
+    print(">>> Creating batState...", flush=True)
     bat_stat = batState()
+    print(">>> batState created", flush=True)
+    print(">>> Getting available modes...", flush=True)
     bat_stat.get_available_modes()
+    print(f">>> Available modes: {bat_stat.available_modes}", flush=True)
 
     # Register signal handlers
     signal.signal(signal.SIGTERM, _signal_handler)
@@ -399,18 +356,22 @@ def watch_battery(time_to_sleep: int = 5) -> None:
 
 
 if __name__ == "__main__":
+    # Configure logging FIRST
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
+    print("=== Starting watch_battery ===", flush=True)
     try:
         watch_battery(time_to_sleep=10)
     except BatteryMonitorError as e:
-        logging.error(f"Failed to start battery monitor: {e}")
+        print(f"FATAL: BatteryMonitorError: {e}", flush=True)
         sys.exit(1)
     except KeyboardInterrupt:
-        logging.info("Interrupted by user.")
+        print("Interrupted by user.", flush=True)
         sys.exit(0)
     except Exception as e:
-        logging.error(f"Unexpected error: {e}")
+        print(f"FATAL: Unexpected error: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
