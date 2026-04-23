@@ -300,10 +300,11 @@ class batState():
         # Clamp to valid range
         brightness = max(0, min(int(brightness), max_brightness))
 
+        logging.info(f"Writing brightness {brightness} to {self.__BRIGHT_DEVICE}")
         try:
             with open(self.__BRIGHT_DEVICE, 'w') as bd:
                 bd.write(str(brightness))
-            logging.debug(f"Brightness set to {brightness}")
+            logging.info(f"Brightness successfully set to {brightness}")
         except (UnsupportedOperation, OSError, IOError, PermissionError) as e:
             logging.error(
                 f"Error writing to brightness device {self.__BRIGHT_DEVICE}")
@@ -360,11 +361,13 @@ def watch_battery(time_to_sleep: int = 5) -> None:
 
         # ALWAYS adjust brightness based on power source
         if bat_stat.state == "on_battery":
-            bat_stat.set_brightness(
-                int((bat_stat.BRIGHTNESS_BATTERY / 100) * bat_stat.get_max_brightness()))
+            new_brightness = int((bat_stat.BRIGHTNESS_BATTERY / 100) * bat_stat.get_max_brightness())
+            logging.info(f"Setting battery brightness: {new_brightness}")
+            bat_stat.set_brightness(new_brightness)
         elif bat_stat.state == "on_ac":
-            bat_stat.set_brightness(
-                int((bat_stat.BRIGHTNESS_AC / 100) * bat_stat.get_max_brightness()))
+            new_brightness = int((bat_stat.BRIGHTNESS_AC / 100) * bat_stat.get_max_brightness())
+            logging.info(f"Setting AC brightness: {new_brightness}")
+            bat_stat.set_brightness(new_brightness)
 
         # Notification checks (only when on battery and low or on AC and high)
         if bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
