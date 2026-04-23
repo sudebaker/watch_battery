@@ -37,10 +37,9 @@ class batState():
         self.__PROFILES_NAME = "net.hadess.PowerProfiles"
         self.__PROFILES_PATH = "/net/hadess/PowerProfiles"
         self.__NOTIFICATIONS = "org.freedesktop.Notifications"
-        self.__BRIGHT_DEVICE = f"/sys/class/backlight/{
-            self.__detect_backlight()}/brightness"
-        self.__BRIGHTNESS_MAX = f"/sys/class/backlight/{
-            self.__detect_backlight()}/max_brightness"
+        backlight_device = self.__detect_backlight()
+        self.__BRIGHT_DEVICE = f"/sys/class/backlight/{backlight_device}/brightness"
+        self.__BRIGHTNESS_MAX = f"/sys/class/backlight/{backlight_device}/max_brightness"
         self.__sys_bus = dbus.SystemBus()
 
         self.battery = None
