@@ -85,7 +85,7 @@ class batState():
         self.get_battery_percentage(self.battery)
         self.get_battery_state(self.battery)
 
-    def __detect_battery(self) -> list:
+    def __detect_battery(self) -> None:
         """
         Detects the battery device and stores it in the battery attribute.
 
@@ -97,7 +97,8 @@ class batState():
                 self.__UPOWER_NAME, self.__UPOWER_PATH)
             upower_interface = dbus.Interface(upower_proxy, self.__UPOWER_NAME)
         except dbus.exceptions.DBusException as e:
-            raise BatteryMonitorError("Error connecting to UPower. Is UPower running?") from e
+            raise BatteryMonitorError(
+                "Error connecting to UPower. Is UPower running?") from e
 
         try:
             devices = upower_interface.EnumerateDevices()
@@ -117,10 +118,12 @@ class batState():
         try:
             backlight = os.listdir(backlight_path)
         except FileNotFoundError:
-            raise BatteryMonitorError(f"Backlight directory not found: {backlight_path}")
+            raise BatteryMonitorError(
+                f"Backlight directory not found: {backlight_path}")
 
         if not backlight:
-            raise BatteryMonitorError(f"No backlight devices found in {backlight_path}")
+            raise BatteryMonitorError(
+                f"No backlight devices found in {backlight_path}")
 
         return backlight[0]
 
@@ -130,7 +133,8 @@ class batState():
             with open(self.__BRIGHTNESS_MAX, 'r') as bm:
                 return int(bm.read())
         except (UnsupportedOperation, OSError, IOError, ValueError) as e:
-            logging.error(f"Error reading max brightness from {self.__BRIGHTNESS_MAX}")
+            logging.error(
+                f"Error reading max brightness from {self.__BRIGHTNESS_MAX}")
             logging.error(e)
             sys.exit(1)
 
@@ -176,7 +180,8 @@ class batState():
             battery (str): The battery device path.
         """
         try:
-            battery_proxy = self.__sys_bus.get_object(self.__UPOWER_NAME, battery)
+            battery_proxy = self.__sys_bus.get_object(
+                self.__UPOWER_NAME, battery)
             battery_proxy_interface = dbus.Interface(
                 battery_proxy, self.__DBUS_PROPERTIES)
         except dbus.exceptions.DBusException:
@@ -198,7 +203,8 @@ class batState():
             logging.warning("Battery is empty!")
             self.state = "on_battery"
         else:  # Unknown (7) or any other
-            logging.warning(f"Unknown battery state: {state}, assuming on_battery")
+            logging.warning(
+                f"Unknown battery state: {state}, assuming on_battery")
             self.state = "on_battery"
 
     def set_powerprofile(self, profile: str) -> None:
@@ -286,7 +292,8 @@ class batState():
             ValueError: If brightness is outside valid range.
         """
         if not isinstance(brightness, (int, float)):
-            raise ValueError(f"Brightness must be numeric, got {type(brightness)}")
+            raise ValueError(
+                f"Brightness must be numeric, got {type(brightness)}")
 
         max_brightness = self.get_max_brightness()
 
@@ -298,9 +305,11 @@ class batState():
                 bd.write(str(brightness))
             logging.debug(f"Brightness set to {brightness}")
         except (UnsupportedOperation, OSError, IOError, PermissionError) as e:
-            logging.error(f"Error writing to brightness device {self.__BRIGHT_DEVICE}")
+            logging.error(
+                f"Error writing to brightness device {self.__BRIGHT_DEVICE}")
             logging.error(e)
-            raise BatteryMonitorError("Failed to set brightness - check permissions") from e
+            raise BatteryMonitorError(
+                "Failed to set brightness - check permissions") from e
 
 
 def watch_battery(time_to_sleep: int = 5) -> None:
@@ -330,7 +339,7 @@ def watch_battery(time_to_sleep: int = 5) -> None:
         if bat_stat.state == "on_battery" and bat_stat.active_profile != bat_stat.PROFILE_POWER_SAVER:
             bat_stat.set_powerprofile(profile=bat_stat.PROFILE_POWER_SAVER)
             bat_stat.set_brightness(
-                (bat_stat.BRIGHTNESS_BATTERY / 100) * bat_stat.get_max_brightness())
+                int((bat_stat.BRIGHTNESS_BATTERY / 100) * bat_stat.get_max_brightness()))
 
         elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat.PROFILE_POWER_SAVER:
             if bat_stat.PROFILE_PERFORMANCE in bat_stat.available_modes:
@@ -338,7 +347,7 @@ def watch_battery(time_to_sleep: int = 5) -> None:
             else:
                 bat_stat.set_powerprofile(profile=bat_stat.PROFILE_BALANCED)
             bat_stat.set_brightness(
-                (bat_stat.BRIGHTNESS_AC / 100) * bat_stat.get_max_brightness())
+                int((bat_stat.BRIGHTNESS_AC / 100) * bat_stat.get_max_brightness()))
 
         # check for level of battery to advise
         elif bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
