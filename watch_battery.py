@@ -389,10 +389,12 @@ def watch_battery(time_to_sleep: int = 5) -> None:
             sleep(1)
 
         if not _shutdown_requested:
-            # getting current state
-            bat_stat.get_powerprofile()
-            bat_stat.get_battery_percentage(bat_stat.battery)
-            bat_stat.get_battery_state(bat_stat.battery)
+            try:
+                bat_stat.get_powerprofile()
+                bat_stat.get_battery_percentage(bat_stat.battery)
+                bat_stat.get_battery_state(bat_stat.battery)
+            except Exception as e:
+                logging.error(f"Error getting state: {e}")
             logging.info(f"Loop State: {bat_stat.state}, Profile: {bat_stat.active_profile}, Percentage: {bat_stat.percentage}")
 
     logging.info("watch_battery daemon stopped.")
