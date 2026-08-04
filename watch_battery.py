@@ -3,7 +3,7 @@
 import os
 import sys
 from io import UnsupportedOperation
-from time import sleep
+from time import sleep, time
 import logging
 import dbus
 
@@ -60,6 +60,11 @@ class batState():
         self.get_battery_percentage(self.battery)
         self.get_battery_state(self.battery)
 
+        # Notification tracking to prevent spam
+        self._notify_cooldown = 300  # seconds between same notification
+        self._last_low_notify = 0
+        self._last_high_notify = 0
+
     def __detect_battery(self) -> list:
         """
         Detects the battery device and stores it in the battery attribute
@@ -85,7 +90,17 @@ class batState():
         """
         Detects the backlight device.
         """
-        backlight = os.listdir("/sys/class/backlight")
+        backlight_path = "/sys/class/backlight"
+        try:
+            backlight = os.listdir(backlight_path)
+        except FileNotFoundError:
+            logging.error(f"Backlight directory not found: {backlight_path}")
+            sys.exit(1)
+
+        if not backlight:
+            logging.error(f"No backlight devices found in {backlight_path}")
+            sys.exit(1)
+
         return backlight[0]
 
     # get max brightness
@@ -131,6 +146,9 @@ class batState():
         """
         Gets the battery state from UPower.
 
+        UPower device states: 1=charging, 2=discharging, 3=empty, 4=full,
+        5=charge-pending, 6=discharge-pending, 7=unknown.
+
         Args:
             battery (str): The battery device path.
         """
@@ -146,10 +164,23 @@ class batState():
         state = int(battery_proxy_interface.Get(
             self.__UPOWER_NAME + ".Device", "State"))
 
-        # state 5? could be on_ac?
-        if state == 1 or state == 5:
+        # Map UPower states to our two internal states.
+        # Charging (1) and charge-pending (5) -> on_ac.
+        # Discharging (2) and discharge-pending (6) -> on_battery.
+        # Full (4) -> on_ac (charger likely connected).
+        # Empty (3) -> treat as on_battery.
+        # Unknown (7) or anything else -> default on_battery with warning.
+        if state in (1, 5):
             self.state = "on_ac"
-        elif state == 2:
+        elif state in (2, 6):
+            self.state = "on_battery"
+        elif state == 4:
+            self.state = "on_ac"
+        elif state == 3:
+            logging.warning("Battery is empty!")
+            self.state = "on_battery"
+        else:
+            logging.warning(f"Unknown UPower battery state {state}, assuming on_battery")
             self.state = "on_battery"
 
     def set_powerprofile(self, profile: str) -> None:
@@ -201,17 +232,29 @@ class batState():
 
         self.active_profile = active_profile.split(",")[0]
 
-    def notify(self, message: str) -> None:
+    def notify(self, message: str, notification_type: str = "generic") -> None:
         """
         Sends a notification using the org.freedesktop.Notifications interface.
+        Rate-limited per notification_type to prevent spam.
 
         Args:
             message (str): The message to display in the notification.
+            notification_type (str): Type for cooldown tracking ("low_battery",
+                "high_battery", or "generic").
         """
+        # Rate limiting: skip if still within cooldown window
+        now = time()
+        last = getattr(self, f"_last_{notification_type}_notify", None)
+        if last and (now - last) < self._notify_cooldown:
+            return
+
         self.__notfy_intf.Notify(
             "", 0, "battery", "Battery Notification", f"{message}",
-            [], {"critical": 1}, 5000
+            [], {"urgency": dbus.Byte(2)}, 5000
         )
+
+        # Record send time
+        setattr(self, f"_last_{notification_type}_notify", now)
 
     def set_brightness(self, brightness: int) -> None:
         """
@@ -229,47 +272,66 @@ class batState():
             sys.exit(1)
 
 
-def watch_battery(time_to_sleep: int = 5, profile: str = "balanced") -> None:
-    """seconds to sleep and default power-profile"""
+def watch_battery(time_to_sleep: int = 5) -> None:
+    """
+    Main daemon loop for battery monitoring.
+
+    Automatically manages:
+    - Power profiles (power-saver on battery, performance on AC)
+    - Screen brightness based on power source
+    - Battery level notifications with rate limiting
+
+    Args:
+        time_to_sleep: Seconds between battery state checks (default: 5)
+    """
 
     bat_stat = batState()
     bat_stat.get_available_modes()
+    bat_stat.get_powerprofile()
     # Main loop
     while True:
+        # --- Read current state BEFORE deciding actions (avoids stale None) ---
+        bat_stat.get_powerprofile()
+        bat_stat.get_battery_percentage(bat_stat.battery)
+        bat_stat.get_battery_state(bat_stat.battery)
 
-        # check for power status, adjusting powerprofiles and brightness in consecuence
-        if bat_stat.state == "on_battery" and bat_stat.active_profile != bat_stat._ps_profile:
-            bat_stat.set_powerprofile(profile=bat_stat._ps_profile)
-            # bat_stat.set_brightness(bat_stat.BRIGHTNESS_BATTERY)
+        # --- Block A: adjust power profile + brightness (independent of block B) ---
+        if bat_stat.state == "on_battery":
+            if bat_stat.active_profile != bat_stat._ps_profile:
+                bat_stat.set_powerprofile(profile=bat_stat._ps_profile)
+            # Always re-apply brightness to keep it in sync
             bat_stat.set_brightness(
-                (bat_stat.BRIGHTNESS_BATTERY / 100) * bat_stat.get_max_brightness())
+                (bat_stat.BRIGHTNESS_BATTERY / 100) * bat_stat.get_max_brightness()
+            )
 
-        elif bat_stat.state == "on_ac" and bat_stat.active_profile == bat_stat._ps_profile:
-            if bat_stat._pf_profile in bat_stat.available_modes:
-                bat_stat.set_powerprofile(profile=bat_stat._pf_profile)
-                # print(bat_stat.active_profile, bat_stat._pf_profile)
-            else:
-                bat_stat.set_powerprofile(profile=bat_stat._bc_profile)
-            # bat_stat.set_brightness(bat_stat.BRIGHTNESS_AC)
+        elif bat_stat.state == "on_ac":
+            # Transition to performance (if available), else balanced
+            desired = (
+                bat_stat._pf_profile
+                if bat_stat._pf_profile in bat_stat.available_modes
+                else bat_stat._bc_profile
+            )
+            if bat_stat.active_profile != desired:
+                bat_stat.set_powerprofile(profile=desired)
+            # Always re-apply brightness to keep it in sync
             bat_stat.set_brightness(
-                (bat_stat.BRIGHTNESS_AC / 100) * bat_stat.get_max_brightness())
+                (bat_stat.BRIGHTNESS_AC / 100) * bat_stat.get_max_brightness()
+            )
 
-        # check for level of battery to advice
-        elif bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
+        # --- Block B: battery-level notifications (independent of block A) ---
+        if bat_stat.percentage < bat_stat.MIN_BAT_TRIGGER and bat_stat.state == "on_battery":
             bat_stat.notify(
-                message=f"Plug the charger, battery below {bat_stat.MIN_BAT_TRIGGER}%"
+                message=f"Plug the charger, battery below {bat_stat.MIN_BAT_TRIGGER}%",
+                notification_type="low_battery",
             )
 
         elif bat_stat.percentage > bat_stat.MAX_BAT_TRIGGER and bat_stat.state == "on_ac":
             bat_stat.notify(
-                message=f"Unplug the charger, battery over {bat_stat.MAX_BAT_TRIGGER}%"
+                message=f"Unplug the charger, battery over {bat_stat.MAX_BAT_TRIGGER}%",
+                notification_type="high_battery",
             )
 
         sleep(time_to_sleep)
-        # getting current state
-        bat_stat.get_powerprofile()
-        bat_stat.get_battery_percentage(bat_stat.battery)
-        bat_stat.get_battery_state(bat_stat.battery)
 
 
 if __name__ == "__main__":
