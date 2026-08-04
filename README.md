@@ -13,7 +13,8 @@ python-dbus
   RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness", \
   RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
 
-- Change the line in the script:
-  - BRIGHT_DEVICE = "/sys/class/backlight/amdgpu_bl0/brightness" with your own device
 - power-profiles-daemon installed and configured
 - Run it from your desktop session launcher.
+
+> The backlight device is auto-detected at runtime from `/sys/class/backlight/` —
+> you do **not** need to edit any `BRIGHT_DEVICE` line in the script.
